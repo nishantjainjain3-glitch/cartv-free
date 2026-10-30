@@ -1,0 +1,23 @@
+name: CarTV
+options:
+  bundleIdPrefix: com.cartv.free
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+targets:
+  CarTV:
+    type: application
+    platform: iOS
+    sources:
+      - path: CarTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cartv.free.player
+        INFOPLIST_FILE: CarTV/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTED_INTERFACE_ORIENTATIONS: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
