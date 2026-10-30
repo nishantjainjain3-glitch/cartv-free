@@ -2,6 +2,7 @@ import Foundation
 import ReplayKit
 import Network
 import CoreImage
+import ImageIO
 
 class ScreenMirrorManager: ObservableObject {
     @Published var isMirroring = false
@@ -57,10 +58,14 @@ class ScreenMirrorManager: ObservableObject {
     private func processVideoFrame(_ sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-           let jpegData = context.jpegRepresentation(of: ciImage, colorSpace: colorSpace, options: [kCGImageDestinationLossyFactor as CIImageRepresentationOption: 0.6]) {
-            self.latestJpegData = jpegData
-            broadcastLatestFrame(jpegData)
+        if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
+            let options: [CIImageRepresentationOption: Any] = [
+                CIImageRepresentationOption(rawValue: kCGImageDestinationLossyFactor as String): 0.6
+            ]
+            if let jpegData = context.jpegRepresentation(of: ciImage, colorSpace: colorSpace, options: options) {
+                self.latestJpegData = jpegData
+                broadcastLatestFrame(jpegData)
+            }
         }
     }
 
