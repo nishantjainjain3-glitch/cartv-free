@@ -60,7 +60,7 @@ class ScreenMirrorManager: ObservableObject {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
             let options: [CIImageRepresentationOption: Any] = [
-                CIImageRepresentationOption(rawValue: kCGImageDestinationLossyFactor as String): 0.6
+                CIImageRepresentationOption(rawValue: "kCGImageDestinationLossyFactor"): 0.6
             ]
             if let jpegData = context.jpegRepresentation(of: ciImage, colorSpace: colorSpace, options: options) {
                 self.latestJpegData = jpegData
