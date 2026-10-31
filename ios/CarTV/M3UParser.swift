@@ -6,6 +6,8 @@ struct Channel: Identifiable, Hashable {
     let streamUrl: String
     let logoUrl: String?
     let group: String
+    let tvgId: String?
+    var currentProgram: String? = nil
 }
 
 enum M3UParser {
@@ -16,6 +18,7 @@ enum M3UParser {
         var currentName = ""
         var currentLogo: String?
         var currentGroup = "General"
+        var currentTvgId: String?
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -23,6 +26,7 @@ enum M3UParser {
             if trimmed.hasPrefix("#EXTINF") {
                 currentLogo = extractAttribute(named: "tvg-logo", from: trimmed)
                 currentGroup = extractAttribute(named: "group-title", from: trimmed) ?? "General"
+                currentTvgId = extractAttribute(named: "tvg-id", from: trimmed)
 
                 if let commaIndex = trimmed.lastIndex(of: ",") {
                     let afterComma = trimmed[trimmed.index(after: commaIndex)...]
@@ -34,20 +38,23 @@ enum M3UParser {
                 if !currentName.isEmpty {
                     channels.append(
                         Channel(
-                            id: UUID().uuidString,
+                            id: currentTvgId ?? UUID().uuidString,
                             name: currentName,
                             streamUrl: trimmed,
                             logoUrl: currentLogo,
-                            group: currentGroup
+                            group: currentGroup,
+                            tvgId: currentTvgId
                         )
                     )
                 }
                 currentName = ""
                 currentLogo = nil
                 currentGroup = "General"
+                currentTvgId = nil
             }
         }
         return channels
+    }
     }
 
     private static func extractAttribute(named name: String, from line: String) -> String? {

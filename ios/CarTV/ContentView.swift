@@ -1,34 +1,67 @@
 import SwiftUI
 
+struct PlaylistPreset: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let url: String
+}
+
 struct ContentView: View {
     @StateObject private var mirrorManager = ScreenMirrorManager()
     @State private var channels: [Channel] = []
     @State private var playlistUrl = "https://iptv-org.github.io/iptv/index.m3u"
-    @State private var selectedChannel: Channel?
+    @State private var selectedIndex: Int? = nil
     @State private var selectedGroup = "All"
     @State private var searchQuery = ""
     @State private var isLoading = false
     @State private var showPlaylistSheet = false
     @State private var activeTab = 0
 
+    // Persistent Favorites
+    @AppStorage("favorite_channels") private var favoriteChannelIdsRaw: String = ""
+
+    var favoriteChannelIds: Set<String> {
+        get { Set(favoriteChannelIdsRaw.components(separatedBy: ",").filter { !$0.isEmpty }) }
+        set { favoriteChannelIdsRaw = newValue.joined(separator: ",") }
+    }
+
+    // Default Preloaded Playlists
+    let presets: [PlaylistPreset] = [
+        PlaylistPreset(name: "Global IPTV (All Categories)", url: "https://iptv-org.github.io/iptv/index.m3u"),
+        PlaylistPreset(name: "News & Current Affairs", url: "https://iptv-org.github.io/iptv/categories/news.m3u"),
+        PlaylistPreset(name: "Sports Live", url: "https://iptv-org.github.io/iptv/categories/sports.m3u"),
+        PlaylistPreset(name: "Movies & Cinema", url: "https://iptv-org.github.io/iptv/categories/movies.m3u"),
+        PlaylistPreset(name: "Music TV", url: "https://iptv-org.github.io/iptv/categories/music.m3u")
+    ]
+
     var groups: [String] {
         var set = Set(channels.map { $0.group })
-        return ["All"] + Array(set).sorted()
+        let list = Array(set).sorted()
+        return ["All", "★ Favorites"] + list
     }
 
     var filteredChannels: [Channel] {
         channels.filter { ch in
-            (selectedGroup == "All" || ch.group == selectedGroup) &&
-            (searchQuery.isEmpty || ch.name.localizedCaseInsensitiveContains(searchQuery))
+            let matchesGroup: Bool
+            if selectedGroup == "★ Favorites" {
+                matchesGroup = favoriteChannelIds.contains(ch.id)
+            } else if selectedGroup == "All" {
+                matchesGroup = true
+            } else {
+                matchesGroup = (ch.group == selectedGroup)
+            }
+
+            let matchesSearch = searchQuery.isEmpty || ch.name.localizedCaseInsensitiveContains(searchQuery)
+            return matchesGroup && matchesSearch
         }
     }
 
     var body: some View {
         TabView(selection: $activeTab) {
-            // TAB 1: Live TV / Playlists
+            // TAB 1: Live TV
             NavigationStack {
                 VStack(spacing: 0) {
-                    // Group Filter Bar
+                    // Category Chips Bar
                     if !groups.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -39,7 +72,7 @@ struct ContentView: View {
                                             .fontWeight(selectedGroup == grp ? .bold : .regular)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 8)
-                                            .background(selectedGroup == grp ? Color.blue : Color(white: 0.15))
+                                            .background(selectedGroup == grp ? (grp == "★ Favorites" ? Color.orange : Color.blue) : Color(white: 0.15))
                                             .foregroundColor(.white)
                                             .cornerRadius(20)
                                     }
@@ -53,60 +86,81 @@ struct ContentView: View {
                     // Channel List
                     if isLoading {
                         Spacer()
-                        ProgressView("Loading Playlist...")
-                            .tint(.white)
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(.white)
+                            Text("Loading Channels & Guide...")
+                                .foregroundColor(.gray)
+                        }
                         Spacer()
                     } else if filteredChannels.isEmpty {
                         Spacer()
                         VStack(spacing: 12) {
-                            Image(systemName: "tv.slash")
+                            Image(systemName: selectedGroup == "★ Favorites" ? "star.slash" : "tv.slash")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
-                            Text("No Channels Found")
+                            Text(selectedGroup == "★ Favorites" ? "No Favorites Added Yet" : "No Channels Found")
                                 .font(.title3)
                                 .foregroundColor(.gray)
-                            Button("Add Playlist Link") {
-                                showPlaylistSheet = true
+                            if selectedGroup != "★ Favorites" {
+                                Button("Add Playlist Link") {
+                                    showPlaylistSheet = true
+                                }
+                                .buttonStyle(.borderedProminent)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                         Spacer()
                     } else {
-                        List(filteredChannels) { channel in
-                            Button(action: { selectedChannel = channel }) {
-                                HStack(spacing: 16) {
-                                    if let logoUrl = channel.logoUrl, let url = URL(string: logoUrl) {
-                                        AsyncImage(url: url) { image in
-                                            image.resizable().aspectRatio(contentMode: .fit)
-                                        } placeholder: {
-                                            Image(systemName: "tv")
+                        List(Array(filteredChannels.enumerated()), id: \.element.id) { index, channel in
+                            HStack(spacing: 16) {
+                                Button(action: {
+                                    if let originalIndex = channels.firstIndex(where: { $0.id == channel.id }) {
+                                        selectedIndex = originalIndex
+                                    }
+                                }) {
+                                    HStack(spacing: 16) {
+                                        if let logoUrl = channel.logoUrl, let url = URL(string: logoUrl) {
+                                            AsyncImage(url: url) { image in
+                                                image.resizable().aspectRatio(contentMode: .fit)
+                                            } placeholder: {
+                                                Image(systemName: "tv")
+                                                    .foregroundColor(.gray)
+                                            }
+                                            .frame(width: 44, height: 44)
+                                            .cornerRadius(8)
+                                        } else {
+                                            Image(systemName: "play.tv.fill")
+                                                .font(.title2)
+                                                .frame(width: 44, height: 44)
+                                                .background(Color(white: 0.15))
+                                                .cornerRadius(8)
+                                                .foregroundColor(.blue)
+                                        }
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(channel.name)
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                            Text(channel.group)
+                                                .font(.caption)
                                                 .foregroundColor(.gray)
                                         }
-                                        .frame(width: 44, height: 44)
-                                        .cornerRadius(8)
-                                    } else {
-                                        Image(systemName: "play.tv.fill")
-                                            .font(.title2)
-                                            .frame(width: 44, height: 44)
-                                            .background(Color(white: 0.15))
-                                            .cornerRadius(8)
-                                            .foregroundColor(.blue)
                                     }
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(channel.name)
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                        Text(channel.group)
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(Color(white: 0.3))
                                 }
-                                .padding(.vertical, 4)
+                                .buttonStyle(.plain)
+
+                                Spacer()
+
+                                // Favorite Star Button
+                                Button(action: { toggleFavorite(id: channel.id) }) {
+                                    Image(systemName: favoriteChannelIds.contains(channel.id) ? "star.fill" : "star")
+                                        .font(.title3)
+                                        .foregroundColor(favoriteChannelIds.contains(channel.id) ? .orange : Color(white: 0.35))
+                                        .padding(8)
+                                }
+                                .buttonStyle(.plain)
                             }
+                            .padding(.vertical, 4)
                             .listRowBackground(Color(white: 0.08))
                         }
                         .listStyle(.plain)
@@ -117,7 +171,7 @@ struct ContentView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(action: { showPlaylistSheet = true }) {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "list.bullet.rectangle")
                                 .font(.title3)
                         }
                     }
@@ -208,15 +262,58 @@ struct ContentView: View {
             }
             .tag(1)
         }
-        .sheet(item: $selectedChannel) { channel in
-            PlayerView(streamUrl: channel.streamUrl)
-                .ignoresSafeArea()
+        .sheet(isPresented: Binding(
+            get: { selectedIndex != nil },
+            set: { if !$0 { selectedIndex = nil } }
+        )) {
+            if let idx = selectedIndex {
+                PlayerView(channels: channels, currentIndex: idx)
+                    .ignoresSafeArea()
+            }
         }
         .sheet(isPresented: $showPlaylistSheet) {
             NavigationStack {
                 VStack(spacing: 20) {
-                    Text("Enter M3U Playlist Link")
+                    Text("Select or Add M3U Playlist")
                         .font(.headline)
+
+                    // Presets
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recommended Playlists:")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+
+                        ForEach(presets) { preset in
+                            Button(action: {
+                                playlistUrl = preset.url
+                                showPlaylistSheet = false
+                                loadPlaylist()
+                            }) {
+                                HStack {
+                                    Text(preset.name)
+                                        .foregroundColor(.white)
+                                        .font(.subheadline)
+                                    Spacer()
+                                    if playlistUrl == preset.url {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                .padding()
+                                .background(Color(white: 0.12))
+                                .cornerRadius(10)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    Divider().background(Color.gray)
+
+                    Text("Custom Playlist URL:")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
 
                     TextField("https://example.com/playlist.m3u", text: $playlistUrl)
                         .textFieldStyle(.roundedBorder)
@@ -224,7 +321,7 @@ struct ContentView: View {
                         .disableAutocorrection(true)
                         .padding(.horizontal)
 
-                    Button("Download & Load Channels") {
+                    Button("Load Custom Playlist") {
                         showPlaylistSheet = false
                         loadPlaylist()
                     }
@@ -234,20 +331,30 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 24)
-                .navigationTitle("Add Playlist")
+                .navigationTitle("Playlists")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showPlaylistSheet = false }
+                        Button("Close") { showPlaylistSheet = false }
                     }
                 }
             }
-            .presentationDetents([.fraction(0.4)])
+            .presentationDetents([.fraction(0.8)])
         }
         .onAppear {
             if channels.isEmpty {
                 loadPlaylist()
             }
         }
+    }
+
+    private func toggleFavorite(id: String) {
+        var current = favoriteChannelIds
+        if current.contains(id) {
+            current.remove(id)
+        } else {
+            current.insert(id)
+        }
+        favoriteChannelIds = current
     }
 
     private func loadPlaylist() {
