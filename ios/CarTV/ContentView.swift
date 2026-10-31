@@ -21,8 +21,7 @@ struct ContentView: View {
     @AppStorage("favorite_channels") private var favoriteChannelIdsRaw: String = ""
 
     var favoriteChannelIds: Set<String> {
-        get { Set(favoriteChannelIdsRaw.components(separatedBy: ",").filter { !$0.isEmpty }) }
-        set { favoriteChannelIdsRaw = newValue.joined(separator: ",") }
+        Set(favoriteChannelIdsRaw.components(separatedBy: ",").filter { !$0.isEmpty })
     }
 
     // Default Preloaded Playlists
@@ -354,7 +353,7 @@ struct ContentView: View {
         } else {
             current.insert(id)
         }
-        favoriteChannelIds = current
+        favoriteChannelIdsRaw = current.joined(separator: ",")
     }
 
     private func loadPlaylist() {

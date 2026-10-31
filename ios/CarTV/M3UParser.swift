@@ -55,7 +55,6 @@ enum M3UParser {
         }
         return channels
     }
-    }
 
     private static func extractAttribute(named name: String, from line: String) -> String? {
         let pattern = "\(name)=\"([^\"]*)\""
